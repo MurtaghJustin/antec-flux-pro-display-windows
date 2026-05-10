@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", "Helvetica Neue", sans-serif;
+  }
+  html, body {
+    width: 1280px;
+    height: 640px;
+    overflow: hidden;
+  }
+  body {
+    background:
+      radial-gradient(ellipse at top right, rgba(56, 139, 253, 0.15), transparent 60%),
+      radial-gradient(ellipse at bottom left, rgba(57, 211, 83, 0.10), transparent 60%),
+      #0d1117;
+    color: #e6edf3;
+    display: flex;
+    align-items: stretch;
+  }
+  .left {
+    flex: 0 0 580px;
+    position: relative;
+    overflow: hidden;
+    background: #161b22;
+    border-right: 1px solid #30363d;
+  }
+  .left::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at center, rgba(0,0,0,0) 30%, rgba(0,0,0,0.45) 100%);
+    z-index: 2;
+  }
+  .left img {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 110%;
+    height: auto;
+    z-index: 1;
+  }
+  .badge {
+    position: absolute;
+    top: 32px;
+    left: 32px;
+    z-index: 3;
+    background: rgba(13, 17, 23, 0.85);
+    backdrop-filter: blur(8px);
+    border: 1px solid #30363d;
+    border-radius: 24px;
+    padding: 8px 18px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #58a6ff;
+    letter-spacing: 0.5px;
+  }
+  .right {
+    flex: 1;
+    padding: 60px 70px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+  h1 {
+    font-size: 56px;
+    font-weight: 800;
+    line-height: 1.05;
+    letter-spacing: -1.5px;
+    margin-bottom: 14px;
+    background: linear-gradient(135deg, #fff 0%, #c9d1d9 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .accent {
+    color: #58a6ff;
+    -webkit-text-fill-color: #58a6ff;
+  }
+  .tagline {
+    font-size: 22px;
+    font-weight: 400;
+    color: #8b949e;
+    margin-bottom: 36px;
+    line-height: 1.4;
+  }
+  ul {
+    list-style: none;
+    margin-bottom: 30px;
+  }
+  ul li {
+    font-size: 18px;
+    color: #c9d1d9;
+    line-height: 1.85;
+    padding-left: 28px;
+    position: relative;
+    font-weight: 500;
+  }
+  ul li::before {
+    content: '✓';
+    position: absolute;
+    left: 0;
+    color: #39d353;
+    font-weight: 800;
+    font-size: 18px;
+  }
+  .footer {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    color: #6e7681;
+    font-size: 17px;
+    border-top: 1px solid #21262d;
+    padding-top: 22px;
+  }
+  .footer .gh {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #8b949e;
+    font-weight: 600;
+  }
+  .footer .gh svg {
+    width: 22px;
+    height: 22px;
+    fill: currentColor;
+  }
+  .footer .repo {
+    color: #58a6ff;
+    font-weight: 600;
+    font-family: "SF Mono", "Cascadia Mono", Menlo, Monaco, "Liberation Mono", monospace;
+    font-size: 16px;
+  }
+</style>
+</head>
+<body>
+  <div class="left">
+    <img src="display.png" alt="Antec display showing temperatures">
+    <div class="badge">FOR ANTEC FLUX PRO</div>
+  </div>
+  <div class="right">
+    <div>
+      <h1>Antec Display<br><span class="accent">Driver</span></h1>
+      <p class="tagline">Open-source replacement for Antec iUnity.<br>No freezes. No bloat. Just temperatures.</p>
+      <ul>
+        <li>Stable - won't crash like iUnity</li>
+        <li>~250 lines of pure PowerShell</li>
+        <li>Real CPU + GPU sensor readings</li>
+        <li>One-click installer</li>
+      </ul>
+    </div>
+    <div class="footer">
+      <div class="gh">
+        <svg viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"></path></svg>
+        github.com /
+      </div>
+      <span class="repo">motiop/antec-flux-pro-display-windows</span>
+    </div>
+  </div>
+</body>
+</html>
