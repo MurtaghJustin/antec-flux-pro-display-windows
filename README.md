@@ -164,6 +164,32 @@ PRs welcome if you find different modes that work.
 
 ---
 
+## Related projects
+
+If this PowerShell approach isn't what you want, there are other options:
+
+- **[nishtahir/antec-flux-pro-display](https://github.com/nishtahir/antec-flux-pro-display)** —
+  Linux daemon written in Rust. The original project that documented the USB
+  protocol; this Windows port wouldn't exist without it.
+- **[shroudedhorizon/antec-flux-pro-display-lightweight](https://github.com/shroudedhorizon/antec-flux-pro-display-lightweight)** —
+  Windows alternative written in C# as a system-tray app. Same sensor stack
+  (LibreHardwareMonitor + PawnIO), different deployment model (compiled `.exe`
+  in user session vs. our PowerShell script running as SYSTEM at boot).
+
+### Why this project vs. the others?
+
+Pick this one if you:
+- Prefer a transparent, hackable script you can read and modify in seconds
+- Want it to run as a background service from boot (no tray icon, no user login required)
+- Like having a built-in `verify.ps1` that runs 15 checks to diagnose problems
+
+Pick `shroudedhorizon`'s if you:
+- Prefer a compiled binary you just double-click
+- Want a system-tray indicator
+- Don't need / want to read the source
+
+Both projects are MIT-licensed and use the same underlying drivers.
+
 ## Credits
 
 - **[@nishtahir](https://github.com/nishtahir)** — reverse-engineered the
