@@ -12,7 +12,7 @@
 param(
     [int]$PollSeconds = 1,
     [string]$LhmPath = "$PSScriptRoot\lhm",
-    [string]$LogPath = "$env:LOCALAPPDATA\AntecDisplay\antec_display.log"
+    [string]$LogPath = "$env:ProgramData\AntecDisplay\antec_display.log"
 )
 
 # === Logging ===
@@ -103,9 +103,12 @@ function Encode-Temp {
         return @([byte]0xEE, [byte]0xEE, [byte]0xEE)
     }
     $t = [Math]::Min(99.9, [Math]::Max(0, [float]$temp))
-    $tens = [int]($t / 10) % 10
-    $ones = [int]$t % 10
-    $tenths = [int]($t * 10) % 10
+    # PowerShell's [int] conversion rounds rather than truncates. Convert the
+    # rounded tenths value to integer digits explicitly (39.8 -> 3, 9, 8).
+    $scaled = [int][Math]::Round($t * 10, 0, [MidpointRounding]::AwayFromZero)
+    $tens = [int][Math]::Floor($scaled / 100) % 10
+    $ones = [int][Math]::Floor($scaled / 10) % 10
+    $tenths = $scaled % 10
     return @([byte]$tens, [byte]$ones, [byte]$tenths)
 }
 
@@ -127,16 +130,31 @@ function Read-CpuTemp {
     foreach ($hw in $computer.Hardware) {
         if ($hw.HardwareType -eq [LibreHardwareMonitor.Hardware.HardwareType]::Cpu) {
             $hw.Update()
-            foreach ($s in $hw.Sensors) {
-                if ($s.SensorType -eq [LibreHardwareMonitor.Hardware.SensorType]::Temperature -and
-                    $s.Name -eq "CPU Package" -and $null -ne $s.Value) {
-                    return [float]$s.Value
+            # Sensor names vary by CPU vendor. Prefer the package/control
+            # temperature, then fall back to the hottest core sensor.
+            $preferredNames = @("CPU Package", "Core (Tctl/Tdie)", "Core Max")
+            foreach ($name in $preferredNames) {
+                foreach ($s in $hw.Sensors) {
+                    if ($s.SensorType -eq [LibreHardwareMonitor.Hardware.SensorType]::Temperature -and
+                        $s.Name -eq $name -and $null -ne $s.Value -and [float]$s.Value -gt 0) {
+                        if ($script:cpuSensorName -ne $s.Name) {
+                            $script:cpuSensorName = $s.Name
+                            Write-Log "Using CPU temperature sensor: $($s.Name) ($($s.Identifier))"
+                        }
+                        return [float]$s.Value
+                    }
                 }
             }
-            # Fallback: use Core Max if CPU Package not available
+
+            # Future CPUs may use another name. Use the first plausible CPU
+            # temperature rather than returning N/A solely because of naming.
             foreach ($s in $hw.Sensors) {
                 if ($s.SensorType -eq [LibreHardwareMonitor.Hardware.SensorType]::Temperature -and
-                    $s.Name -eq "Core Max" -and $null -ne $s.Value) {
+                    $null -ne $s.Value -and [float]$s.Value -gt 0 -and [float]$s.Value -le 125) {
+                    if ($script:cpuSensorName -ne $s.Name) {
+                        $script:cpuSensorName = $s.Name
+                        Write-Log "Using fallback CPU temperature sensor: $($s.Name) ($($s.Identifier))" "WARN"
+                    }
                     return [float]$s.Value
                 }
             }
@@ -164,6 +182,7 @@ function Read-GpuTemp {
 # === Main loop ===
 Write-Log "Entering main loop"
 $stream = $null
+$outputReportLength = 65
 $lastLog = [DateTime]::MinValue
 $consecutiveErrors = 0
 
@@ -183,7 +202,8 @@ while ($true) {
                 continue
             }
             $stream = $tempStream
-            Write-Log "Display device opened"
+            $outputReportLength = [Math]::Max(13, $dev.GetMaxOutputReportLength())
+            Write-Log "Display device opened (output report length: $outputReportLength)"
             $consecutiveErrors = 0
         }
 
@@ -193,7 +213,9 @@ while ($true) {
         $payload = Build-Payload $cpu $gpu
 
         # HID Output Report - byte 0 is Report ID
-        $buffer = [byte[]]::new($payload.Length + 1)
+        # Windows HID writes use the descriptor's complete report length. Byte
+        # zero is the report ID; the remaining unused bytes stay zero-padded.
+        $buffer = [byte[]]::new($outputReportLength)
         $buffer[0] = 0
         [Array]::Copy($payload, 0, $buffer, 1, $payload.Length)
 

@@ -27,7 +27,7 @@ Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction Silen
 }
 
 # Optional: remove logs
-$logDir = "$env:LOCALAPPDATA\AntecDisplay"
+$logDir = "$env:ProgramData\AntecDisplay"
 if (Test-Path $logDir) {
     Remove-Item $logDir -Recurse -Force -ErrorAction SilentlyContinue
     Write-Host "[OK] Removed log directory $logDir" -ForegroundColor Green

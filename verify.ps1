@@ -8,7 +8,7 @@ param(
 )
 
 $ErrorActionPreference = "SilentlyContinue"
-$logPath = "$env:LOCALAPPDATA\AntecDisplay\antec_display.log"
+$logPath = "$env:ProgramData\AntecDisplay\antec_display.log"
 
 $pass = 0
 $fail = 0
@@ -81,6 +81,15 @@ Test-Item -Name "HidSharp library" `
     -Test { Test-Path "$InstallDir\lhm\HidSharp.dll" } `
     -FailMessage "HidSharp.dll missing" `
     -FailFix "Re-extract release archive"
+
+Test-Item -Name "Libraries are not blocked by Windows" `
+    -Test {
+        $blocked = Get-ChildItem "$InstallDir\lhm" -File -ErrorAction SilentlyContinue |
+            Where-Object { Get-Item -LiteralPath $_.FullName -Stream Zone.Identifier -ErrorAction SilentlyContinue }
+        $null -eq $blocked -or @($blocked).Count -eq 0
+    } `
+    -FailMessage "Downloaded library files have a Zone.Identifier and .NET may reject them with 0x80131515" `
+    -FailFix "Get-ChildItem `"$InstallDir`" -Recurse -File | Unblock-File"
 
 Test-Item -Name "PawnIO installer present" `
     -Test { Test-Path "$InstallDir\PawnIO_setup.exe" } `
@@ -186,14 +195,14 @@ Write-Host ""
 Write-Host "## FUNCTIONAL ##" -ForegroundColor Yellow
 
 if (Test-Path $logPath) {
-    $lastTwo = Get-Content $logPath -Tail 2 -Encoding UTF8
-    $hasCpu = $lastTwo -match "CPU=\d+\.?\d*C"
-    $hasGpu = $lastTwo -match "GPU=\d+\.?\d*C"
+    $recentLog = Get-Content $logPath -Tail 20 -Encoding UTF8
+    $hasCpu = $recentLog -match "CPU=\d+\.?\d*C"
+    $hasGpu = $recentLog -match "GPU=\d+\.?\d*C"
 
     Test-Item -Name "CPU temperature being read" `
         -Test { $hasCpu } `
         -FailMessage "CPU shows N/A or 0" `
-        -FailFix "Restart-Service PawnIO (as admin), then re-run task" `
+        -FailFix "Run install.ps1 as administrator so the task runs as SYSTEM, then inspect the ProgramData log" `
         -Severity "Warning"
 
     Test-Item -Name "GPU temperature being read" `

@@ -110,7 +110,7 @@ The script accepts parameters:
 .\antec-display.ps1 `
     -PollSeconds 1 `                              # How often to send updates
     -LhmPath "$PSScriptRoot\lhm" `                # Path to LibreHardwareMonitor DLLs
-    -LogPath "$env:LOCALAPPDATA\AntecDisplay\antec_display.log"
+    -LogPath "$env:ProgramData\AntecDisplay\antec_display.log"
 ```
 
 To change the poll interval permanently, edit the scheduled task arguments
@@ -123,7 +123,7 @@ default in `antec-display.ps1` and re-run `install.ps1`.
 
 ```powershell
 # Live log
-Get-Content "$env:LOCALAPPDATA\AntecDisplay\antec_display.log" -Tail 20 -Wait -Encoding UTF8
+Get-Content "$env:ProgramData\AntecDisplay\antec_display.log" -Tail 20 -Wait -Encoding UTF8
 
 # Restart the tool
 schtasks /run /tn AntecDisplay

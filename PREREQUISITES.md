@@ -110,7 +110,7 @@ Some vendor tools (CPUID, AIDA64, OpenHardwareMonitor) load their own kernel dri
 | Symptom | Likely cause | Fix |
 |---|---|---|
 | Display blank | Tool not running OR device disconnected | `schtasks /run /tn AntecDisplay` |
-| Display shows EE/EE | Tool running but sensors return null | Restart-Service PawnIO; restart task |
+| Display shows EE/EE | Tool running but sensors return null | Confirm PawnIO is running; re-run `install.ps1` as administrator |
 | Display shows GPU but CPU says 0 | PawnIO not running | `Start-Service PawnIO` |
 | Display works briefly then freezes | iUnity is running in background | Uninstall iUnity |
 | `verify.ps1` fails on "task exists" | You're not running as admin | Re-run as administrator |
@@ -126,13 +126,14 @@ schtasks /end /tn AntecDisplay
 Start-Sleep 2
 schtasks /run /tn AntecDisplay
 Start-Sleep 5
-Get-Content "$env:LOCALAPPDATA\AntecDisplay\antec_display.log" -Tail 5 -Encoding UTF8
+Get-Content "$env:ProgramData\AntecDisplay\antec_display.log" -Tail 5 -Encoding UTF8
 ```
 
 **CPU temperature stuck at N/A:**
 ```powershell
 # As administrator
-Restart-Service PawnIO
+Get-Service PawnIO
+# If it is stopped: Start-Service PawnIO
 schtasks /end /tn AntecDisplay
 schtasks /run /tn AntecDisplay
 ```
@@ -155,6 +156,6 @@ Open a GitHub issue if:
 
 When filing, include:
 1. Output of `verify.ps1`
-2. Last 50 lines of log: `Get-Content "$env:LOCALAPPDATA\AntecDisplay\antec_display.log" -Tail 50 -Encoding UTF8`
+2. Last 50 lines of log: `Get-Content "$env:ProgramData\AntecDisplay\antec_display.log" -Tail 50 -Encoding UTF8`
 3. Your CPU model and motherboard
 4. Windows version: `winver`

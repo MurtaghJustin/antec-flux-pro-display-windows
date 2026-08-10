@@ -40,6 +40,12 @@ foreach ($f in $requiredFiles) {
 }
 Write-Host "[OK] All required files found" -ForegroundColor Green
 
+# Release ZIPs downloaded by a browser can mark every extracted DLL as coming
+# from the Internet. .NET Framework then refuses to load them (0x80131515).
+Get-ChildItem -Path $InstallDir -Recurse -File -ErrorAction SilentlyContinue |
+    Unblock-File -ErrorAction SilentlyContinue
+Write-Host "[OK] Cleared Windows download blocking from installation files" -ForegroundColor Green
+
 # Check display device is connected
 $displayDev = Get-PnpDevice -InstanceId "*VID_2022*PID_0522*" -Status OK -ErrorAction SilentlyContinue
 if (-not $displayDev) {
@@ -127,7 +133,7 @@ $xml = @"
 $xmlPath = "$env:TEMP\antec_task.xml"
 [System.IO.File]::WriteAllText($xmlPath, $xml, [System.Text.Encoding]::Unicode)
 
-schtasks /delete /tn "AntecDisplay" /f 2>$null | Out-Null
+cmd.exe /c 'schtasks /delete /tn "AntecDisplay" /f >nul 2>&1'
 $result = schtasks /create /tn "AntecDisplay" /xml $xmlPath /f 2>&1
 Remove-Item $xmlPath -Force -ErrorAction SilentlyContinue
 
@@ -143,7 +149,7 @@ Write-Step "3. Starting tool"
 schtasks /run /tn "AntecDisplay" | Out-Null
 Start-Sleep 8
 
-$logPath = "$env:LOCALAPPDATA\AntecDisplay\antec_display.log"
+$logPath = "$env:ProgramData\AntecDisplay\antec_display.log"
 if (Test-Path $logPath) {
     Write-Host "[OK] Tool is running - last log entries:" -ForegroundColor Green
     Get-Content $logPath -Tail 5 -Encoding UTF8 | ForEach-Object {
