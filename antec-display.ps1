@@ -163,20 +163,85 @@ function Read-CpuTemp {
     return $null
 }
 
-function Read-GpuTemp {
-    foreach ($hw in $computer.Hardware) {
-        if ($hw.HardwareType -eq [LibreHardwareMonitor.Hardware.HardwareType]::GpuNvidia -or
-            $hw.HardwareType -eq [LibreHardwareMonitor.Hardware.HardwareType]::GpuAmd) {
-            $hw.Update()
-            foreach ($s in $hw.Sensors) {
-                if ($s.SensorType -eq [LibreHardwareMonitor.Hardware.SensorType]::Temperature -and
-                    $s.Name -eq "GPU Core" -and $null -ne $s.Value) {
-                    return [float]$s.Value
-                }
+# A machine can expose several GPUs taking whichever LibreHardwareMonitor enumerated
+# first is not safe: the integrated GPU comes first and can win if it exposes a temperature
+# sensor (which some APUs likely do)
+$script:gpuHardware = $null
+$script:gpuSensorName = $null
+
+function Get-GpuTempSensor {
+    param($hw)
+    foreach ($name in @("GPU Core", "GPU Hot Spot", "Core")) {
+        foreach ($s in $hw.Sensors) {
+            if ($s.SensorType -eq [LibreHardwareMonitor.Hardware.SensorType]::Temperature -and
+                $s.Name -eq $name -and $null -ne $s.Value -and [float]$s.Value -gt 0) {
+                return $s
             }
         }
     }
     return $null
+}
+
+function Select-GpuHardware {
+    $best = $null
+    $bestScore = -1
+    foreach ($hw in $computer.Hardware) {
+        # String match rather than the HardwareType enum so an Intel iGPU
+        # (GpuIntel, absent from older LHM builds) is still considered.
+        if (-not $hw.HardwareType.ToString().StartsWith("Gpu")) { continue }
+        $hw.Update()
+        if ($null -eq (Get-GpuTempSensor $hw)) { continue }
+
+        # Dedicated video memory and fans are what separate a discrete card
+        # from an integrated one, which carves out a small shared block (512MB
+        # on this machine) and rides the CPU cooler.
+        $vram = 0.0
+        $hasFan = $false
+        foreach ($s in $hw.Sensors) {
+            if ($s.SensorType -eq [LibreHardwareMonitor.Hardware.SensorType]::SmallData -and
+                $s.Name -eq "GPU Memory Total" -and $null -ne $s.Value) {
+                $vram = [float]$s.Value
+            }
+            if ($s.SensorType -eq [LibreHardwareMonitor.Hardware.SensorType]::Fan) {
+                $hasFan = $true
+            }
+        }
+        $discrete = ($vram -ge 1024) -or $hasFan
+        $score = $vram
+        if ($discrete) { $score += 1000000 }
+
+        Write-Log "  GPU candidate: $($hw.Name) [$($hw.HardwareType)] vram=$([int]$vram)MB fan=$hasFan discrete=$discrete score=$([int]$score)"
+        if ($score -gt $bestScore) {
+            $bestScore = $score
+            $best = $hw
+        }
+    }
+    return $best
+}
+
+function Read-GpuTemp {
+    if ($null -eq $script:gpuHardware) {
+        $script:gpuHardware = Select-GpuHardware
+        if ($null -eq $script:gpuHardware) { return $null }
+        Write-Log "Using GPU: $($script:gpuHardware.Name) [$($script:gpuHardware.HardwareType)]"
+    }
+
+    $hw = $script:gpuHardware
+    $hw.Update()
+    $s = Get-GpuTempSensor $hw
+    if ($null -eq $s) {
+        # Do not silently fall through to another GPU - a temperature that
+        # jumps between two cards is worse than one honest N/A frame.
+        Write-Log "GPU '$($hw.Name)' stopped reporting a temperature, will reselect" "WARN"
+        $script:gpuHardware = $null
+        $script:gpuSensorName = $null
+        return $null
+    }
+    if ($script:gpuSensorName -ne $s.Name) {
+        $script:gpuSensorName = $s.Name
+        Write-Log "Using GPU temperature sensor: $($s.Name) ($($s.Identifier))"
+    }
+    return [float]$s.Value
 }
 
 # === Main loop ===
