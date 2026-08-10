@@ -186,8 +186,52 @@ $outputReportLength = 65
 $lastLog = [DateTime]::MinValue
 $consecutiveErrors = 0
 
+# The display blanks whenever it stops being fed, so every millisecond spent
+# not writing is visible on the panel. These tunables all exist to keep the
+# gaps short.
+
+# HidSharp defaults to a 3000ms write timeout. A wedged write therefore costs
+# three seconds of blank display before we even learn it failed.
+$WriteTimeoutMs = 500
+
+# A write that takes this long is already a visible stutter - log it, because
+# the once-a-minute summary below is far too coarse to show it.
+$SlowWriteMs = 250
+
+# Across S3 the USB device is reset and re-enumerated while our handle stays
+# open. Writes to the stale handle then block for seconds instead of failing.
+# There is no reliable power-broadcast to subscribe to from session 0 (the
+# task runs as SYSTEM, non-interactive), so detect the suspend by its
+# wall-clock footprint instead: an iteration gap far larger than the poll
+# period means the process was frozen.
+$ResumeGapSeconds = [Math]::Max(5, $PollSeconds * 3)
+
+# Reconnect backoff. The first retries are fast because a 5s sleep here is a
+# 5s blank panel; only sustained failure backs off far.
+$backoffMs = @(250, 250, 500, 1000, 2000, 5000)
+
+# Fixed-cadence pacing. Sleeping the full poll period *after* the work made
+# the real period 1s + read/write time, which drifted.
+$periodMs = [Math]::Max(100, $PollSeconds * 1000)
+$sw = [System.Diagnostics.Stopwatch]::StartNew()
+$nextTickMs = 0.0
+
+$lastIterationEnd = [DateTime]::UtcNow
+$maxWriteMs = 0.0
+$naStreak = 0
+
 while ($true) {
     try {
+        if ($stream) {
+            $gap = ([DateTime]::UtcNow - $lastIterationEnd).TotalSeconds
+            if ($gap -ge $ResumeGapSeconds) {
+                Write-Log ("Wall-clock gap of {0:N1}s (suspend/resume?) - reopening display device" -f $gap) "WARN"
+                try { $stream.Dispose() } catch {}
+                $stream = $null
+                $nextTickMs = $sw.Elapsed.TotalMilliseconds
+            }
+        }
+
         if (-not $stream) {
             $dev = Find-DisplayDevice
             if (-not $dev) {
@@ -202,9 +246,17 @@ while ($true) {
                 continue
             }
             $stream = $tempStream
+            try {
+                $stream.WriteTimeout = $WriteTimeoutMs
+            } catch {
+                Write-Log "Could not set write timeout: $_" "WARN"
+            }
             $outputReportLength = [Math]::Max(13, $dev.GetMaxOutputReportLength())
-            Write-Log "Display device opened (output report length: $outputReportLength)"
+            Write-Log "Display device opened (output report length: $outputReportLength, write timeout: ${WriteTimeoutMs}ms)"
             $consecutiveErrors = 0
+            # Opening can take a while; do not let that count as a suspend.
+            $lastIterationEnd = [DateTime]::UtcNow
+            $nextTickMs = $sw.Elapsed.TotalMilliseconds
         }
 
         $cpu = Read-CpuTemp
@@ -219,8 +271,33 @@ while ($true) {
         $buffer[0] = 0
         [Array]::Copy($payload, 0, $buffer, 1, $payload.Length)
 
+        $writeSw = [System.Diagnostics.Stopwatch]::StartNew()
         $stream.Write($buffer, 0, $buffer.Length)
+        $writeSw.Stop()
         $consecutiveErrors = 0
+        $lastIterationEnd = [DateTime]::UtcNow
+
+        $writeMs = $writeSw.Elapsed.TotalMilliseconds
+        if ($writeMs -gt $maxWriteMs) { $maxWriteMs = $writeMs }
+        if ($writeMs -ge $SlowWriteMs) {
+            Write-Log ("Slow HID write: {0:N0}ms" -f $writeMs) "WARN"
+        }
+
+        # A null sensor is encoded as 0xEE 0xEE 0xEE, which the display shows
+        # as a blank field. Log the edges only, so a permanently dead sensor
+        # cannot flood the log.
+        if ($null -eq $cpu -or $null -eq $gpu) {
+            $naStreak++
+            if ($naStreak -eq 1) {
+                $which = @()
+                if ($null -eq $cpu) { $which += "CPU" }
+                if ($null -eq $gpu) { $which += "GPU" }
+                Write-Log "Sensor N/A for $($which -join '+') - sending blank (0xEE) to display" "WARN"
+            }
+        } elseif ($naStreak -gt 0) {
+            Write-Log "Sensor readings recovered after $naStreak N/A frame(s)" "WARN"
+            $naStreak = 0
+        }
 
         # Log once per minute (avoid log spam)
         $now = Get-Date
@@ -228,11 +305,20 @@ while ($true) {
             $cpuStr = if ($null -ne $cpu) { "$([Math]::Round($cpu, 1))C" } else { "N/A" }
             $gpuStr = if ($null -ne $gpu) { "$([Math]::Round($gpu, 1))C" } else { "N/A" }
             $hexStr = ($payload | ForEach-Object { '{0:x2}' -f $_ }) -join ' '
-            Write-Log "CPU=$cpuStr GPU=$gpuStr | bytes: $hexStr"
+            Write-Log ("CPU=$cpuStr GPU=$gpuStr | bytes: $hexStr | peak write {0:N0}ms" -f $maxWriteMs)
             $lastLog = $now
+            $maxWriteMs = 0.0
         }
 
-        Start-Sleep -Seconds $PollSeconds
+        # Sleep only the remainder of the period.
+        $nextTickMs += $periodMs
+        $remainingMs = $nextTickMs - $sw.Elapsed.TotalMilliseconds
+        if ($remainingMs -lt 1) {
+            # Fell behind. Resync rather than firing a catch-up burst.
+            $nextTickMs = $sw.Elapsed.TotalMilliseconds
+        } else {
+            Start-Sleep -Milliseconds ([int]$remainingMs)
+        }
     }
     catch {
         $consecutiveErrors++
@@ -243,7 +329,11 @@ while ($true) {
             Write-Log "Too many errors, exiting" "FATAL"
             break
         }
-        Start-Sleep 5
+        $delayMs = $backoffMs[[Math]::Min($consecutiveErrors - 1, $backoffMs.Count - 1)]
+        Write-Log "Reconnecting in ${delayMs}ms (consecutive failures: $consecutiveErrors)" "WARN"
+        Start-Sleep -Milliseconds $delayMs
+        $lastIterationEnd = [DateTime]::UtcNow
+        $nextTickMs = $sw.Elapsed.TotalMilliseconds
     }
 }
 
