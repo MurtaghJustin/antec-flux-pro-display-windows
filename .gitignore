@@ -18,3 +18,4 @@ $RECYCLE.BIN/
 # Test artifacts
 test_*.ps1
 debug_*.ps1
+.claude/settings.local.json
