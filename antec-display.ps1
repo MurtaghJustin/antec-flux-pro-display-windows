@@ -163,9 +163,7 @@ function Read-CpuTemp {
     return $null
 }
 
-# A machine can expose several GPUs taking whichever LibreHardwareMonitor enumerated
-# first is not safe: the integrated GPU comes first and can win if it exposes a temperature
-# sensor (which some APUs likely do)
+# Prefer a discrete GPU when LibreHardwareMonitor exposes multiple GPUs.
 $script:gpuHardware = $null
 $script:gpuSensorName = $null
 
@@ -192,9 +190,6 @@ function Select-GpuHardware {
         $hw.Update()
         if ($null -eq (Get-GpuTempSensor $hw)) { continue }
 
-        # Dedicated video memory and fans are what separate a discrete card
-        # from an integrated one, which carves out a small shared block (512MB
-        # on this machine) and rides the CPU cooler.
         $vram = 0.0
         $hasFan = $false
         foreach ($s in $hw.Sensors) {
@@ -319,7 +314,6 @@ while ($true) {
             $outputReportLength = [Math]::Max(13, $dev.GetMaxOutputReportLength())
             Write-Log "Display device opened (output report length: $outputReportLength, write timeout: ${WriteTimeoutMs}ms)"
             $consecutiveErrors = 0
-            # Opening can take a while; do not let that count as a suspend.
             $lastIterationEnd = [DateTime]::UtcNow
             $nextTickMs = $sw.Elapsed.TotalMilliseconds
         }
@@ -375,11 +369,9 @@ while ($true) {
             $maxWriteMs = 0.0
         }
 
-        # Sleep only the remainder of the period.
         $nextTickMs += $periodMs
         $remainingMs = $nextTickMs - $sw.Elapsed.TotalMilliseconds
         if ($remainingMs -lt 1) {
-            # Fell behind. Resync rather than firing a catch-up burst.
             $nextTickMs = $sw.Elapsed.TotalMilliseconds
         } else {
             Start-Sleep -Milliseconds ([int]$remainingMs)
