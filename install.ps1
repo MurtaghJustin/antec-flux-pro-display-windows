@@ -42,9 +42,13 @@ Write-Host "[OK] All required files found" -ForegroundColor Green
 
 # Release ZIPs downloaded by a browser can mark every extracted DLL as coming
 # from the Internet. .NET Framework then refuses to load them (0x80131515).
-Get-ChildItem -Path $InstallDir -Recurse -File -ErrorAction SilentlyContinue |
-    Unblock-File -ErrorAction SilentlyContinue
-Write-Host "[OK] Cleared Windows download blocking from installation files" -ForegroundColor Green
+$filesToUnblock = @(Get-ChildItem -Path "$InstallDir\lhm" -Recurse -File -Filter "*.dll" -ErrorAction SilentlyContinue)
+$pawnSetup = "$InstallDir\PawnIO_setup.exe"
+if (Test-Path $pawnSetup) {
+    $filesToUnblock += Get-Item -LiteralPath $pawnSetup
+}
+$filesToUnblock | Unblock-File -ErrorAction SilentlyContinue
+Write-Host "[OK] Cleared Windows download blocking from packaged binaries" -ForegroundColor Green
 
 # Check display device is connected
 $displayDev = Get-PnpDevice -InstanceId "*VID_2022*PID_0522*" -Status OK -ErrorAction SilentlyContinue

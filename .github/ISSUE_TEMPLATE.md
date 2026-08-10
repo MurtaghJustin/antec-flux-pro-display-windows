@@ -35,7 +35,7 @@ Output of `verify.ps1`:
 Last 50 lines of the tool log:
 
 ```powershell
-Get-Content "$env:LOCALAPPDATA\AntecDisplay\antec_display.log" -Tail 50 -Encoding UTF8
+Get-Content "$env:ProgramData\AntecDisplay\antec_display.log" -Tail 50 -Encoding UTF8
 ```
 
 ```

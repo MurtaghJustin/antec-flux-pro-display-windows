@@ -313,7 +313,6 @@ while ($true) {
             }
             $outputReportLength = [Math]::Max(13, $dev.GetMaxOutputReportLength())
             Write-Log "Display device opened (output report length: $outputReportLength, write timeout: ${WriteTimeoutMs}ms)"
-            $consecutiveErrors = 0
             $lastIterationEnd = [DateTime]::UtcNow
             $nextTickMs = $sw.Elapsed.TotalMilliseconds
         }
